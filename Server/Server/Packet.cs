@@ -58,6 +58,11 @@ namespace Networking
             Buffer.BlockCopy(_contents, 0, m_buffer, OverheadLength, _contents.Length);
         }
 
+        public Packet(byte[] _packet)
+        {
+            m_buffer = _packet;
+        }
+
         private byte[] ExtractContents()
         {
             ushort size = (ushort)(m_buffer.Length - OverheadLength);
@@ -71,17 +76,32 @@ namespace Networking
             return _packet.m_buffer;
         }
 
-        public static Packet Serialize(ushort _id, object _obj)
+        public static explicit operator Packet (byte[] _bytes)
+        {
+            return new Packet(_bytes);
+        }
+
+        /// <summary>
+        /// Serialize Contents.
+        /// </summary>
+        /// <param name="_id"></param>
+        /// <param name="_contents"></param>
+        /// <returns></returns>
+        public static Packet Serialize(ushort _id, object _contents)
         {
             using (MemoryStream ms = new MemoryStream())
             {
                 BinaryFormatter bf = new BinaryFormatter();
-                bf.Serialize(ms, _obj);
+                bf.Serialize(ms, _contents);
 
                 return new Packet(_id, ms.ToArray());
             }
         }
 
+        /// <summary>
+        /// Deserialize Contents.
+        /// </summary>
+        /// <returns></returns>
         public object Deserialize()
         {
             using (MemoryStream ms = new MemoryStream(PacketBytes, OverheadLength, ContentsLength))
