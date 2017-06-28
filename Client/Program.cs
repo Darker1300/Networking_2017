@@ -1,15 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System;
 
 namespace Client
 {
-    class Program
+    internal class Program
     {
-        static Client client;
-        static void Main(string[] args)
+        private static Client client;
+
+        private static void Main(string[] args)
         {
             client = new Client();
 

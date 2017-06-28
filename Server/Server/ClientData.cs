@@ -1,30 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using Server.Accounts;
 
 namespace Server
 {
-    class ClientData
+    internal class ClientConnection : IEquatable<ClientConnection>
     {
-        public Socket m_socket;
-        public Thread m_thread; // to do
+        public TcpClient m_socket;
+        public AccountData m_account;
 
-        public string m_id;
-
-
-        public ClientData()
-        {
-            m_id = Guid.NewGuid().ToString();
-        }
-
-        public ClientData(Socket _socket)
+        public ClientConnection(TcpClient _socket, AccountData _account)
         {
             m_socket = _socket;
-            m_id = Guid.NewGuid().ToString();
+            m_account = _account;
+        }
+
+        public bool Equals(ClientConnection other)
+        {
+            return m_account.Equals(other.m_account);
+        }
+
+        public override int GetHashCode()
+        {
+            return m_account.GetHashCode();
         }
     }
 }

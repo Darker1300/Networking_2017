@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.IO;
-using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Networking
 {
-    class Packet
+    internal class Packet
     {
         /// <summary>
         /// Contains both contents and overhead.
@@ -48,7 +44,6 @@ namespace Networking
         /// </summary>
         public byte[] ContentBytes { get { return ExtractContents(); } }
 
-
         public Packet(ushort _id, byte[] _contents)
         {
             m_buffer = new byte[OverheadLength + _contents.Length];
@@ -76,7 +71,7 @@ namespace Networking
             return _packet.m_buffer;
         }
 
-        public static explicit operator Packet (byte[] _bytes)
+        public static explicit operator Packet(byte[] _bytes)
         {
             return new Packet(_bytes);
         }
@@ -110,7 +105,10 @@ namespace Networking
                 return bf.Deserialize(ms);
             }
         }
-        public T Deserialize<T>() { return (T)Deserialize(); }
 
+        public T Deserialize<T>()
+        {
+            return (T)Deserialize();
+        }
     }
 }
