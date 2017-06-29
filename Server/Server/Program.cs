@@ -9,7 +9,7 @@ namespace Server
         private static void Main(string[] args)
         {
             server = new Server();
-
+            server.Run();
             Console.ReadLine();
         }
     }

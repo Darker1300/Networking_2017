@@ -10,6 +10,7 @@ namespace Server
         public TcpClient m_socket;
         public AccountData m_account;
 
+        public ClientConnection() { }
         public ClientConnection(TcpClient _socket, AccountData _account)
         {
             m_socket = _socket;

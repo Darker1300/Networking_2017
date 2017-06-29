@@ -6,23 +6,23 @@ namespace Server.Accounts
     [Serializable]
     public sealed class AccountData : IEquatable<AccountData>
     {
-        public string UserName { get; set; }
+        public string Username { get; set; }
         public string Password { get; set; }
 
         public AccountData(string user, string pass)
         {
-            UserName = user;
+            Username = user;
             Password = pass;
         }
 
         public bool Equals(AccountData other)
         {
-            return UserName.Equals(other.UserName);
+            return Username.Equals(other.Username);
         }
 
         public override int GetHashCode()
         {
-            return UserName.GetHashCode();
+            return Username.GetHashCode();
         }
 
         public override bool Equals(object obj)

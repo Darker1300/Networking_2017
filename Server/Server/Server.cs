@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -6,96 +7,115 @@ using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 using Server.Accounts;
 
 namespace Server
 {
+    // Define types
+    using AccountDictionary = ConcurrentDictionary<AccountData, AccountData>;
+    using ConnectionDictionary = ConcurrentDictionary<ClientConnection, ClientConnection>;
+
     internal class Server
     {
         // Config
         private int m_serverPort = 8080;
+
         private IPAddress m_serverIP = IPAddress.Any;
 
-        private static string certFileName = "cert.pfx";
-        private static string certPassword = "instant";
-        private static string accountsFileName = "users.dat";
+        private string certFileName = "cert.pfx";
+        private string certPassword = "instant";
+        private string accountsFileName = "users.dat";
 
         // Loaded Data
-        private static X509Certificate2 m_certificate;
-        private static HashSet<AccountData> m_accounts;
+        private X509Certificate2 m_certificate;
+
+        private AccountDictionary m_accounts;
 
         // Connections
-        private TcpListener m_serverSocket;
-        private HashSet<ClientConnection> m_clients;
+        private TcpListener m_serverListener;
 
-        // Thread
-        private Thread m_serverThread;
+        private ConnectionDictionary m_clients;
+
+        // Task
+        private Task m_listenTask;
+
+        private CancellationTokenSource m_listenCancelTS;
 
         // State
         private bool m_isRunning;
 
-        // Events
-        public event EventHandler ServerStart;
-        public event EventHandler ServerEnd;
+        public bool IsRunning { get { return m_isRunning; } }
 
         public Server()
         {
-            m_certificate = new X509Certificate2(certFileName, certPassword);
-
-            m_accounts = new HashSet<AccountData>();
-            m_clients = new HashSet<ClientConnection>();
-
             m_isRunning = false;
+            // Create Security Certificate
+            m_certificate = new X509Certificate2(certFileName, certPassword);
+            // Initalise m_accounts
+            LoadUsers();
+
+            m_clients = new ConnectionDictionary();
+            // Create Listener
+            m_serverListener = new TcpListener(m_serverIP, m_serverPort);
         }
 
         public void Shutdown()
         {
-            m_isRunning = false;
+            m_listenCancelTS.Cancel();
         }
 
         public void Run()
         {
-            LoadUsers();
             m_isRunning = true;
 
-            m_serverSocket = new TcpListener(m_serverIP, m_serverPort);
-
-            m_serverThread = new Thread(new ThreadStart(ProcessServer));
-            m_serverThread.Start();
+            // Create token
+            m_listenCancelTS = new CancellationTokenSource();
+            // Setup shutdown callback
+            m_listenCancelTS.Token.Register(OnResolvedShutdown);
+            // Start Listening task
+            m_listenTask = Task.Run(() => ProcessServer(m_listenCancelTS.Token), m_listenCancelTS.Token);
         }
 
-        private void ProcessServer()
+        private void ProcessServer(CancellationToken _token)
         {
-            ServerStart.Invoke(m_serverThread, EventArgs.Empty);
+            List<Task> tasks = new List<Task>();
 
-            m_serverSocket.Start(); // Start Listening
-            while (m_isRunning)
+            // Start Listening
+            m_serverListener.Start();
+            while (!_token.IsCancellationRequested)
             {
                 // Check if there are any pending connection requests
-                if (m_serverSocket.Pending())
+                if (m_serverListener.Pending())
                 {
-                    // Create a new thread to handle the connection
-                    TcpClient connection = m_serverSocket.AcceptTcpClient();
-                    Thread thread = new Thread(new ParameterizedThreadStart(ProcessConnection));
-                    thread.Start(connection as object);
+                    // Accept Connection
+                    TcpClient connection = m_serverListener.AcceptTcpClient();
+                    // Create a new task to handle the connection
+                    tasks.Add(Task.Run(() => ProcessConnection(connection)));
                 }
+                m_listenCancelTS.Cancel();
             }
-            m_serverSocket.Stop(); // Stop Listening
-            SaveUsers(); // Save data
+            // Stop Listening
+            m_serverListener.Stop();
 
-            ServerEnd.Invoke(m_serverThread, EventArgs.Empty);
+            // Wait for current tasks to finish, with a timeout.
+            Task.WaitAll(tasks.ToArray(), TimeSpan.FromSeconds(20));
+
+            // Save data
+            SaveUsers();
         }
 
-        private void ProcessConnection(object _obj)
+        private void ProcessConnection(TcpClient _tcp)
         {
-            TcpClient _connection = _obj as TcpClient;
-            
             // Get Client ID
             // Make sure AccountData exists
             //
         }
 
-        private void LoadUsers()  // Load users data
+        /// <summary>
+        /// Initialises 'm_accounts' with data file at [Environment.CurrentDirectory\accountsFileName].
+        /// </summary>
+        private void LoadUsers()
         {
             Console.WriteLine("[{0}] Loading users...", DateTime.Now);
             try
@@ -103,29 +123,31 @@ namespace Server
                 string path = Environment.CurrentDirectory + "\\" + accountsFileName;
                 using (FileStream file = new FileStream(path, FileMode.Open, FileAccess.Read))
                 {
+                    // Deserialize
                     BinaryFormatter bf = new BinaryFormatter();
-                    HashSet<AccountData> Deserial = bf.Deserialize(file) as HashSet<AccountData>;
-                    // Merge
-                    m_accounts.UnionWith(Deserial);
+                    var Deserial = bf.Deserialize(file) as KeyValuePair<AccountData, AccountData>[];
+                    // Set accounts
+                    m_accounts = new AccountDictionary(Deserial);
                 }
                 Console.WriteLine("[{0}] Users loaded! ({1})", DateTime.Now, m_accounts.Count);
             }
             catch
             {
                 Console.WriteLine("[{0}] Users Failed to load!", DateTime.Now);
+                m_accounts = new AccountDictionary();
             }
         }
 
-        private void SaveUsers()  // Save users data
+        private void SaveUsers()
         {
             Console.WriteLine("[{0}] Saving users...", DateTime.Now);
             try
             {
                 using (MemoryStream ms = new MemoryStream())
                 {
-                    // Serialize AccountsInfo
+                    // Serialize accounts
                     BinaryFormatter bf = new BinaryFormatter();
-                    bf.Serialize(ms, m_accounts);
+                    bf.Serialize(ms, m_accounts.ToArray());
                     // Write to file
                     string path = Environment.CurrentDirectory + "\\" + accountsFileName;
                     File.WriteAllBytes(path, ms.ToArray());
@@ -137,6 +159,17 @@ namespace Server
                 Console.WriteLine("[{0}] Users Failed to save!", DateTime.Now);
             }
         }
+
+        /// <summary>
+        /// Shutdown callback, after all remaining connections are resolved and 'accounts data' is saved to file.
+        /// </summary>
+        private void OnResolvedShutdown()
+        {
+            m_isRunning = false;
+        }
+
+        private void AddOrUpdateConnection()
+        {
+        }
     }
 }
-// TODO wrap connection in class, store connections
