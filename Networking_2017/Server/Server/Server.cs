@@ -17,9 +17,9 @@ namespace Server
     internal class Server
     {
         // Config
-        private int m_serverPort = 2000;
+        public int m_serverPort = 2000;
 
-        private IPAddress m_serverIP = IPAddress.Parse("127.0.0.1"); //IPAddress.Any;
+        public IPAddress m_serverIP = IPAddress.Parse("127.0.0.1"); //IPAddress.Any;
 
         private string certFileName = "cert.pfx";
         private string certPassword = "instant";
@@ -33,10 +33,7 @@ namespace Server
         // Connections
         private TcpListener m_serverListener;
 
-        //// Task
-        //private Thread m_listenThread;
-
-        // private CancellationTokenSource m_listenCancelTS;
+        List<ClientConnection> m_connections;
 
         // State
         private bool m_isRunning;
@@ -51,33 +48,27 @@ namespace Server
             // Create Security Certificate
             m_certificate = new X509Certificate2(certFileName, certPassword);
             // Initalise m_accounts
-            Console.WriteLine("[{0}] Server Initalising...", DateTime.Now);
             LoadAccounts();
         }
 
         public void Run()
         {
-            Console.WriteLine("[{0}] Running server...", DateTime.Now);
+            Console.WriteLine("[{0}] Initialising server.", DateTime.Now);
             m_shouldBeRunning = true;
 
             // Create Listener
             m_serverListener = new TcpListener(m_serverIP, m_serverPort);
-            // Create token
-            //m_listenCancelTS = new CancellationTokenSource();
-            // Setup shutdown callback
-            //m_listenCancelTS.Token.Register(OnResolvedShutdown);
+            // Create Connections List
+            m_connections = new List<ClientConnection>();
+
             Console.WriteLine("[{0}] Listening for connections.", DateTime.Now);
             // Start Listening task
             ThreadPool.QueueUserWorkItem(ProcessServer);
-
-            //m_listenThread = Thread. Task.Run(() => ProcessServer(m_listenCancelTS.Token), m_listenCancelTS.Token);
         }
 
         private void ProcessServer(object _empty)
         {
             m_isRunning = true;
-            //List<Task> tasks = new List<Task>();
-            //CancellationToken token = (CancellationToken)_token;
             // Start Listening
             m_serverListener.Start();
             while (m_shouldBeRunning)
@@ -86,17 +77,22 @@ namespace Server
                 if (m_serverListener.Pending())
                 {
                     // Accept Connection
-                    TcpClient connection = m_serverListener.AcceptTcpClient();
-                    // Create a new task to handle the connection
-                    ThreadPool.QueueUserWorkItem(ProcessConnection, connection as object);
-                    //tasks.Add(Task.Run(() => ProcessConnection(connection)));
+                    TcpClient tcpClient = m_serverListener.AcceptTcpClient();
+                    // Connect and process remote client state with a different thread
+                    ThreadPool.QueueUserWorkItem(ProcessConnection, tcpClient as object);
                 }
             }
             // Stop Listening
             m_serverListener.Stop();
 
-            //// Wait for current tasks to finish, with a timeout.
-            //Task.WaitAll(tasks.ToArray(), TimeSpan.FromSeconds(20));
+            lock (m_connections)
+                foreach (ClientConnection cc in m_connections)
+                {
+                    lock (cc)
+                    {
+                        cc.CloseConnection();
+                    }
+                }
 
             // Save data
             SaveAccounts();
@@ -106,10 +102,18 @@ namespace Server
         private void ProcessConnection(object _tcp)
         {
             ClientConnection connection = new ClientConnection(_tcp as TcpClient, m_certificate, m_accounts);
-            // Receive state from remote client, then process said state
-            connection.SetupConnection();
-        }
 
+            // Add to collection
+            lock (m_connections)
+                m_connections.Add(connection);
+
+            // Connect and process remote client state
+            connection.SetupConnection();
+
+            // Connection has ended
+            lock (m_connections)
+                m_connections.Remove(connection);
+        }
         /// <summary>
         /// Initialises 'm_accounts' with data file at [Environment.CurrentDirectory\accountsFileName].
         /// </summary>
@@ -163,16 +167,6 @@ namespace Server
             Console.WriteLine("[{0}] Shutting down...", DateTime.Now);
 
             m_shouldBeRunning = false;
-            //m_listenCancelTS.Cancel();
         }
-
-        ///// <summary>
-        ///// Shutdown callback, after all remaining connections are resolved and 'accounts data' is saved to file.
-        ///// </summary>
-        //public void OnResolvedShutdown()
-        //{
-        //    m_isRunning = false;
-        //    Console.WriteLine("[{0}] Shutdown confirmed.", DateTime.Now);
-        //}
     }
 }

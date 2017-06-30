@@ -122,7 +122,6 @@ namespace Client
 
                 // Connect and communicate to server in another thread.
                 ThreadPool.QueueUserWorkItem(SetupConn);
-               // tcpTask = Task.Run((System.Action)SetupConn);
             }
         }
 
