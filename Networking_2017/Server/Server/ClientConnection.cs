@@ -11,7 +11,7 @@ using Server.Accounts;
 
 namespace Server
 {
-    public class ClientConnection
+    public class ClientConnection : IDisposable
     {
         public TcpClient m_clientSocket;        // TCP socket
         public X509Certificate2 m_certificate;  // Reference to security certificate
@@ -36,7 +36,7 @@ namespace Server
             {
                 Logger.Message("New connection detected.");
 
-                // Setup encrypted connection
+                // Set up encrypted connection
                 SetupSecurity();
 
                 Logger.Message("Connection authenticated.");
@@ -45,7 +45,7 @@ namespace Server
                 m_bWriter.Write(Protocol.IM_Hello);
                 m_bWriter.Flush();
 
-                // Wait for Inital Signal
+                // Wait for Initial Signal
                 int handshake = m_bReader.ReadInt32();
 
                 // Handshake Test
@@ -56,7 +56,7 @@ namespace Server
                     return;
                 }
 
-                // Handshake packet is OK. Time to wait for login or register.
+                // Handshake packet is OK. Time to wait for login or register, and account details.
                 byte logMode = m_bReader.ReadByte();
                 string userName = m_bReader.ReadString();
                 string password = m_bReader.ReadString();
@@ -64,7 +64,7 @@ namespace Server
                 // Username Length Test
                 if (userName.Length >= 10)
                 {
-                    Logger.Message("Username Lenth Test Failed.");
+                    Logger.Message("Username Length Test Failed.");
                     m_bWriter.Write(Protocol.IM_TooUsername);
                     CloseConnection();
                     return;
@@ -72,7 +72,7 @@ namespace Server
                 // Password Length Test
                 if (password.Length >= 20)
                 {
-                    Logger.Message("Password Lenth Test Failed.");
+                    Logger.Message("Password Length Test Failed.");
                     m_bWriter.Write(Protocol.IM_TooPassword);
                     CloseConnection();
                     return;
@@ -83,7 +83,7 @@ namespace Server
                 {
                     case Protocol.IM_Register:
                         {
-                            // Account Existance Test
+                            // Account Existence Test
                             if (AccountExists(userName))
                             {
                                 Logger.Message("Register Error: Account already exists.");
@@ -102,7 +102,7 @@ namespace Server
 
                     case Protocol.IM_Login:
                         {
-                            // Account Existance Test
+                            // Account Existence Test
                             if (!AccountExists(userName))
                             {
                                 Logger.Message("Login Error: Account does not exist.");
@@ -158,7 +158,7 @@ namespace Server
                                     m_bWriter.Write(targetUsername);
 
                                     AccountData targetAccount;
-                                    // Account Existance
+                                    // Account Existence
                                     bool targetExists = GetAccount(targetUsername, out targetAccount);
                                     // Login State
                                     bool targetLoginStatus = targetExists ? GetAccountLoginStatus(targetAccount) : false;
@@ -182,7 +182,7 @@ namespace Server
                                     string receiverMessage = m_bReader.ReadString();
 
                                     AccountData receiverAccount;
-                                    // Account Existance
+                                    // Account Existence
                                     bool receiverExists = GetAccount(receiverUsername, out receiverAccount);
                                     // Login State
                                     bool receiverLoginStatus = receiverExists ? GetAccountLoginStatus(receiverAccount) : false;
@@ -217,8 +217,8 @@ namespace Server
                 }
                 catch (IOException)
                 {
-                    // User disconnected prematurely?
-                    
+                    // Lost connection with user.
+
                     Logger.Message("User has lost connection. ({0})", m_account == null ? "Unknown" : m_account.Username);
                 }
 
@@ -243,10 +243,7 @@ namespace Server
         public void CloseConnection()
         {
             CloseConnection(m_clientSocket, m_netStream, m_ssl, m_bReader, m_bWriter);
-
-            if (m_account != null)
-                lock (m_account)
-                    Logger.Message("Connection Closed. [{0}]", m_account != null ? m_account.Username : "Null");
+            Logger.Message("Connection Closed. [{0}]", m_account != null ? m_account.Username : "Unknown");
         }
 
         private bool AccountExists(string _userName)
@@ -365,6 +362,11 @@ namespace Server
             _ssl.Close();
             _netStream.Close();
             _socket.Close();
+        }
+
+        public void Dispose()
+        {
+            CloseConnection();
         }
     }
 }

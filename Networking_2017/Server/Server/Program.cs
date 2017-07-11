@@ -9,9 +9,11 @@ namespace Server
         private static void Main(string[] args)
         {
             server = new Server();
+            Console.WriteLine("Run Server?");
             Console.ReadLine();
             server.Run();
             Console.ReadLine();
+            Console.WriteLine("Shutting Down Server.");
             server.Shutdown();
             Console.ReadLine();
         }

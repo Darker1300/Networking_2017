@@ -1,43 +1,44 @@
 using System;
+using Networking;
 
 namespace Client
 {
-    public enum IMError : byte
+    public enum ErrorID : byte
     {
-        TooUserName = Networking.Protocol.IM_TooUsername,
-        TooPassword = Networking.Protocol.IM_TooPassword,
-        Exists = Networking.Protocol.IM_Exists,
-        NoExists = Networking.Protocol.IM_NoExists,
-        WrongPassword = Networking.Protocol.IM_WrongPass
+        TooUserName = Protocol.IM_TooUsername,
+        TooPassword = Protocol.IM_TooPassword,
+        Exists = Protocol.IM_Exists,
+        NoExists = Protocol.IM_NoExists,
+        WrongPassword = Protocol.IM_WrongPass
     }
 
-    public delegate void IMErrorEventHandler(object sender, IMErrorEventArgs e);
+    public delegate void ErrorEventHandler(object sender, ErrorEventArgs e);
 
-    public delegate void IMAvailEventHandler(object sender, IMAvailEventArgs e);
+    public delegate void AvailEventHandler(object sender, UserAvailEventArgs e);
 
-    public delegate void IMReceivedEventHandler(object sender, IMReceivedEventArgs e);
+    public delegate void ReceivedEventHandler(object sender, MsgReceivedEventArgs e);
 
-    public class IMErrorEventArgs : EventArgs
+    public class ErrorEventArgs : EventArgs
     {
-        private IMError err;
+        private ErrorID err;
 
-        public IMErrorEventArgs(IMError error)
+        public ErrorEventArgs(ErrorID error)
         {
             this.err = error;
         }
 
-        public IMError Error
+        public ErrorID Error
         {
             get { return err; }
         }
     }
 
-    public class IMAvailEventArgs : EventArgs
+    public class UserAvailEventArgs : EventArgs
     {
         private string user;
         private bool avail;
 
-        public IMAvailEventArgs(string user, bool avail)
+        public UserAvailEventArgs(string user, bool avail)
         {
             this.user = user;
             this.avail = avail;
@@ -54,12 +55,12 @@ namespace Client
         }
     }
 
-    public class IMReceivedEventArgs : EventArgs
+    public class MsgReceivedEventArgs : EventArgs
     {
         private string user;
         private string msg;
 
-        public IMReceivedEventArgs(string user, string msg)
+        public MsgReceivedEventArgs(string user, string msg)
         {
             this.user = user;
             this.msg = msg;

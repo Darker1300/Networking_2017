@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using Server.Accounts;
-using System.Linq;
 
 namespace Server
 {
@@ -19,7 +19,7 @@ namespace Server
         // Config
         public int m_serverPort = 2000;
 
-        public IPAddress m_serverIP = IPAddress.Parse("127.0.0.1"); //IPAddress.Any;
+        public IPAddress m_serverIP = IPAddress.Any;// IPAddress.Parse("127.0.0.1"); //IPAddress.Any;
 
         private string certFileName = "cert.pfx";
         private string certPassword = "instant";
@@ -33,18 +33,19 @@ namespace Server
         // Connections
         private TcpListener m_serverListener;
 
-        List<ClientConnection> m_connections;
+        private List<ClientConnection> m_connections;
 
         // State
         private bool m_isRunning;
-        private bool m_shouldBeRunning;
+
+        private bool m_continueRunning;
 
         public bool IsRunning { get { return m_isRunning; } }
 
         public Server()
         {
             m_isRunning = false;
-            m_shouldBeRunning = false;
+            m_continueRunning = false;
             // Create Security Certificate
             m_certificate = new X509Certificate2(certFileName, certPassword);
             // Initalise m_accounts
@@ -54,7 +55,7 @@ namespace Server
         public void Run()
         {
             Console.WriteLine("[{0}] Initialising server.", DateTime.Now);
-            m_shouldBeRunning = true;
+            m_continueRunning = true;
 
             // Create Listener
             m_serverListener = new TcpListener(m_serverIP, m_serverPort);
@@ -66,12 +67,19 @@ namespace Server
             ThreadPool.QueueUserWorkItem(ProcessServer);
         }
 
+        public void Shutdown()
+        {
+            Console.WriteLine("[{0}] Shutting down...", DateTime.Now);
+
+            m_continueRunning = false;
+        }
+
         private void ProcessServer(object _empty)
         {
             m_isRunning = true;
             // Start Listening
             m_serverListener.Start();
-            while (m_shouldBeRunning)
+            while (m_continueRunning)
             {
                 // Check if there are any pending connection requests
                 if (m_serverListener.Pending())
@@ -114,6 +122,7 @@ namespace Server
             lock (m_connections)
                 m_connections.Remove(connection);
         }
+
         /// <summary>
         /// Initialises 'm_accounts' with data file at [Environment.CurrentDirectory\accountsFileName].
         /// </summary>
@@ -160,13 +169,6 @@ namespace Server
             {
                 Console.WriteLine("[{0}] Accounts Failed to save!", DateTime.Now);
             }
-        }
-
-        public void Shutdown()
-        {
-            Console.WriteLine("[{0}] Shutting down...", DateTime.Now);
-
-            m_shouldBeRunning = false;
         }
     }
 }
